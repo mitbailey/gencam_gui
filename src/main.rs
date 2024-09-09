@@ -1,6 +1,16 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use std::any::Any;
+use std::vec;
+
+use eframe::egui;
+use eframe::egui::{Visuals, Margin};
+use egui::menu;
+use egui::{Frame, Widget};
+use serialport::SerialPortInfo;
+use egui_dock::{DockArea, DockState, NodeIndex};
+
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -18,9 +28,13 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "eframe template",
+        "Generic Camera GUI",
         native_options,
-        Box::new(|cc| Ok(Box::new(eframe_template::TemplateApp::new(cc)))),
+        Box::new(|cc| {
+            // This gives us image support:
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Box::<GenCamGUI>::default()
+        }),
     )
 }
 
@@ -37,7 +51,11 @@ fn main() {
             .start(
                 "the_canvas_id",
                 web_options,
-                Box::new(|cc| Ok(Box::new(eframe_template::TemplateApp::new(cc)))),
+                Box::new(|cc| {
+                    // This gives us image support:
+                    egui_extras::install_image_loaders(&cc.egui_ctx);
+                    Box::<Mcs>::default()
+                }),
             )
             .await;
 
@@ -59,4 +77,14 @@ fn main() {
             }
         }
     });
+}
+
+struct GenCamGUI {
+
+}
+
+impl Default for GenCamGUI {
+    fn default() -> Self {
+        Self {}
+    }
 }

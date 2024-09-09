@@ -1,7 +1,7 @@
 [package]
-name = "eframe_template"
-version = "0.1.0"
-authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
+name = "gencam_gui"
+version = "0.0.1"
+authors = ["Mitchell Bailey <mitchell_bailey@student.uml.edu>"]
 edition = "2021"
 include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
 rust-version = "1.76"
@@ -22,6 +22,10 @@ log = "0.4"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
+egui_extras = "0.28.1"
+image = "0.25.2"
+egui_plot = "0.28.1"
+egui_dock = "0.13.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

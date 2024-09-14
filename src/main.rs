@@ -2,14 +2,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::any::Any;
+use std::time::SystemTime;
 use std::vec;
 use std::collections::HashMap;
 
+use egui::load::SizedTexture;
+use refimage::{DynamicImageData, GenericImage};
+use image::{open, ImageReader};
+
 use eframe::egui;
 use eframe::egui::{Margin, Visuals};
-use egui::menu;
-use egui::{Frame, Widget, Id};
+use egui::{menu, ImageSource};
+use egui::{Frame, Widget, Id, Image};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
+use eframe::egui::{load::Bytes};
+use std::io::Cursor;
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
@@ -79,12 +86,14 @@ fn main() {
     });
 }
 
+#[derive(Debug, Clone)]
 enum GUITabKind {
     // DeviceManager,
     DeviceList,     // The main window / landing page.
     CameraControls, // Represents any number of cameras details pages (1 per camera).
 }
 
+#[derive(Debug, Clone)]
 enum DialogType {
     Debug,
     Info,
@@ -104,16 +113,19 @@ impl DialogType {
 }
 
 // TODO: This is an example for the sake of GUI functionality.
+#[derive(Debug, Clone)]
 struct CamData {
     name: String,
 }
 
+#[derive(Clone)]
 struct GUITab {
     kind: GUITabKind,
     surface: SurfaceIndex,
     node: NodeIndex,
 }
 
+#[derive(Debug, Clone)]
 struct GenCamTabsViewer {
     modal_active: bool,
     num_cameras: u32,
@@ -121,6 +133,9 @@ struct GenCamTabsViewer {
 
     // HashMap<UCID, CamData>
     connected_cameras: HashMap<String, CamData>,
+
+    data: Bytes,
+    uri: String,
 }
 
 impl egui_dock::TabViewer for GenCamTabsViewer {
@@ -169,6 +184,21 @@ impl egui_dock::TabViewer for GenCamTabsViewer {
 }
 
 impl GenCamTabsViewer {
+    fn new(path: &str) -> Self {
+        let img = image::open(path).unwrap().to_rgb8();
+        let mut data = Cursor::new(Vec::new());
+        img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+
+        Self {
+            modal_active: false,
+            num_cameras: 0,
+            connected_cameras: HashMap::new(),
+
+            data: data.into_inner().into(),
+            uri: "image/png".into(),
+        }
+    }
+
     fn tab_device_list(&mut self, ui: &mut egui::Ui) {
         ui.label("This is tab 1.");
 
@@ -182,18 +212,48 @@ impl GenCamTabsViewer {
     fn add_camera(&mut self) {
         // Add a new camera to the list.
         self.num_cameras += 1;
-        self.connected_cameras.insert(self.num_cameras.to_string(), CamData { name: "Example Camera".to_owned() });
+        self.connected_cameras.insert(self.num_cameras.to_string(), CamData { name: format!("Example Camera #{}", self.num_cameras) });
     }
     
     fn tab_camera_controls(&mut self, ui: &mut egui::Ui, utid: &str) {
+        
         // TODO: Handle the fact that each camera control tab will be a separate camera. Will involve using the tab ID (UTID) to look up the camera in the hashmap.
 
-        ui.label("This is tab 2.");
-        ui.label(format!("This tab is named {}", utid));
-        // ui.label(format!("This tab is named {}", ));
+        ui.label(format!("This tab has Unique Tab ID {}", utid));
+        ui.label(format!("{:?}", self.connected_cameras.get(utid)));
+
+
+        // Here we show the image data.
+        ui.add(
+            egui::Image::new(ImageSource::Bytes { uri: self.uri.clone().into(), bytes: self.data.clone() }).rounding(10.0),
+        );
+        
+        // Examples / tests on on-the-fly image manipulation.
+        // Button
+        if ui.button("Swap Image").on_hover_text("Swap the image data.").clicked() {
+            let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
+            let mut data = Cursor::new(Vec::new());
+            img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+            self.data = data.into_inner().into();
+        }
+
+        if ui.button("Reload Image").on_hover_text("Refresh the image to reflect changed data.").clicked() {
+            ui.ctx().forget_image(&self.uri.clone());
+        }
+
+        if ui.button("Nuke Image").on_hover_text("Set all bytes to 0x0.").clicked() {
+            // Change all values in self.data to 0.
+            self.data = Bytes::from(vec![0; self.data.len()]);
+
+            ui.ctx().forget_image(&self.uri.clone());
+        }
+
+        let sum: i64 = self.data.iter().map(|&x| x as i64).sum();
+        ui.label(format!("{}", sum));
+
     }
 }
-
+#[derive(Clone)]
 struct GenCamGUI {
     tabs: GenCamTabsViewer,
     tree: DockState<String>,
@@ -224,11 +284,16 @@ impl Default for GenCamGUI {
         //     .main_surface_mut()
         //     .split_below(a, 0.8, vec!["Data Log".to_owned()]);
 
-        let tabs = GenCamTabsViewer {
-            modal_active: false,
-            num_cameras: 0,
-            connected_cameras: HashMap::new(),
-        };
+
+        let tabs = GenCamTabsViewer::new("res/Gcg_Information.png");
+
+        // let tabs = GenCamTabsViewer {
+        //     modal_active: false,
+        //     num_cameras: 0,
+        //     connected_cameras: HashMap::new(),
+        //     // image: GenericImage::new(SystemTime::now(), img),
+        //     texture: None,
+        // };
         
         Self {
             tree,
@@ -325,7 +390,7 @@ impl GenCamGUI {
 }
 
 impl eframe::App for GenCamGUI {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         ctx.set_pixels_per_point(1.5);
 
         //////////////////////////////////////////////////////////////

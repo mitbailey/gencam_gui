@@ -136,6 +136,8 @@ struct GenCamTabsViewer {
 
     data: Bytes,
     uri: String,
+
+    frame: egui::Frame,
 }
 
 impl egui_dock::TabViewer for GenCamTabsViewer {
@@ -196,6 +198,21 @@ impl GenCamTabsViewer {
 
             data: data.into_inner().into(),
             uri: "image/png".into(),
+
+            frame: egui::Frame {
+                inner_margin: 6.0.into(),
+                outer_margin: 3.0.into(),
+                rounding: 3.0.into(),
+                shadow: egui::Shadow::NONE,
+                //  {
+                //     offset: [2.0, 3.0].into(),
+                //     blur: 16.0,
+                //     spread: 0.0,
+                //     color: egui::Color32::from_black_alpha(245),
+                // },
+                fill: egui::Color32::from_white_alpha(255),
+                stroke: egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
+            },
         }
     }
 
@@ -215,41 +232,115 @@ impl GenCamTabsViewer {
         self.connected_cameras.insert(self.num_cameras.to_string(), CamData { name: format!("Example Camera #{}", self.num_cameras) });
     }
     
+    // Camera Control tab UI.
+    // BOOKMARK (UI): This is where the camera control tab UI is defined.
     fn tab_camera_controls(&mut self, ui: &mut egui::Ui, utid: &str) {
+        let winsize = ui.ctx().input(|i: &egui::InputState| i.screen_rect());
+        let win_width = winsize.width();
+        let win_height = winsize.height();
+
+        ui.label(format!("The window size is: {} x {}", win_width, win_height));
         
         // TODO: Handle the fact that each camera control tab will be a separate camera. Will involve using the tab ID (UTID) to look up the camera in the hashmap.
-
+        
         ui.label(format!("This tab has Unique Tab ID {}", utid));
         ui.label(format!("{:?}", self.connected_cameras.get(utid)));
 
+        egui::TopBottomPanel::bottom("status_panel").show(ui.ctx(), |ui| {
+            ui.label(format!("Hello world from {}!", utid));
+        });
 
-        // Here we show the image data.
-        ui.add(
-            egui::Image::new(ImageSource::Bytes { uri: self.uri.clone().into(), bytes: self.data.clone() }).rounding(10.0),
-        );
+        ui.columns(2, |col| {
+            // When inside a layout closure within the column we can just use 'ui'.
+
+            // FIRST COLUMN
+            col[0].label("First column");
+            col[0].vertical(|ui| {
+                // Here we show the image data.
+                self.frame.show(ui, |ui| {
+                    ui.add(
+                        egui::Image::new(ImageSource::Bytes { uri: self.uri.clone().into(), bytes: self.data.clone() })
+                        .rounding(10.0)
+                        .fit_to_original_size(1.0)
+                    );
+                });
+    
+                self.frame.show(ui, |ui| {
+                    ui.label("Image Controls");
         
-        // Examples / tests on on-the-fly image manipulation.
-        // Button
-        if ui.button("Swap Image").on_hover_text("Swap the image data.").clicked() {
-            let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
-            let mut data = Cursor::new(Vec::new());
-            img.write_to(&mut data, image::ImageFormat::Png).unwrap();
-            self.data = data.into_inner().into();
-        }
+                    ui.horizontal_wrapped(|ui: &mut egui::Ui| {
+                        // Examples / tests on on-the-fly image manipulation.
+                        // Button
+                        if ui.button("Swap Image").on_hover_text("Swap the image data.").clicked() {
+                            let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
+                            let mut data = Cursor::new(Vec::new());
+                            img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+                            self.data = data.into_inner().into();
+                        }
+                
+                        if ui.button("Reload Image").on_hover_text("Refresh the image to reflect changed data.").clicked() {
+                            ui.ctx().forget_image(&self.uri.clone());
+                        }
+                
+                        if ui.button("Nuke Image").on_hover_text("Set all bytes to 0x0.").clicked() {
+                            // Change all values in self.data to 0.
+                            self.data = Bytes::from(vec![0; self.data.len()]);
+                
+                            ui.ctx().forget_image(&self.uri.clone());
+                        }
+                    });
+                });
+            });
+    
+            // SECOND COLUMN
+            col[1].label("Second column");
+            col[1].vertical(|ui| {
+                self.frame.show(ui, |ui| {
+                    ui.collapsing("GenCam Controls 1", |ui| {
+                        ui.label("This is a collapsible section.");
+                    });
+                }); 
 
-        if ui.button("Reload Image").on_hover_text("Refresh the image to reflect changed data.").clicked() {
-            ui.ctx().forget_image(&self.uri.clone());
-        }
+                self.frame.show(ui, |ui| {
+                    ui.collapsing("GenCam Controls 2", |ui| {
+                        ui.label("This is a collapsible section.");
+                    });
+                }); 
 
-        if ui.button("Nuke Image").on_hover_text("Set all bytes to 0x0.").clicked() {
-            // Change all values in self.data to 0.
-            self.data = Bytes::from(vec![0; self.data.len()]);
+                self.frame.show(ui, |ui| {
+                    ui.collapsing("Non-GenCam Controls", |ui| {
+                        ui.label("This is a collapsible section.");
+                        if ui.button("Get Exposure").on_hover_text("On hover text TBD.").clicked() {
+                            // Get exposure value.
+                        }
+                        if ui.button("Set Exposure").on_hover_text("On hover text TBD.").clicked() {
+                            // Set exposure value.
+                        }
+                        ui.checkbox(&mut true, "Enable Auto-Exposure");
+                    });
+                }); 
 
-            ui.ctx().forget_image(&self.uri.clone());
-        }
-
+                self.frame.show(ui, |ui| {
+                    ui.collapsing("File Saving", |ui| {
+                        ui.label("This is a collapsible section.");
+                    });
+                }); 
+            });
+        });
+    
         let sum: i64 = self.data.iter().map(|&x| x as i64).sum();
         ui.label(format!("{}", sum));
+
+        // Image controls
+        egui::Frame::default()
+        .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+        .rounding(ui.visuals().widgets.noninteractive.rounding)
+        .inner_margin(3.0)
+        .outer_margin(3.0)
+        // .shadow(egui::Shadow::new([8.0, 12.0].into(), 16.0, egui::Color32::from_black_alpha(180)))
+        .show(ui, |ui| {
+            ui.label("Test text!");
+        });
 
     }
 }
@@ -257,6 +348,8 @@ impl GenCamTabsViewer {
 struct GenCamGUI {
     tabs: GenCamTabsViewer,
     tree: DockState<String>,
+    // tree_cc: DockState<String>, // Tree for Camera Controls tabs.
+    // tree_dl: DockState<String>, // Tree for Device List tabs.
     ucids_tabs: Vec<String>,
 
     dialog_type: DialogType,
@@ -270,11 +363,23 @@ struct GenCamGUI {
 impl Default for GenCamGUI {
     fn default() -> Self {
         let mut tree = DockState::new(vec!["Device List".to_owned()]); // Tabs such as "Cam 0", "Cam 1", etc will be added during runtime as necessary.
+        // let mut tree_dl = DockState::new(vec!["Device List".to_owned()]); // Tabs such as "Cam 0", "Cam 1", etc will be added during runtime as necessary.
+
+        // let mut tree_cc = DockState::new(vec!["Camera Controls".to_owned()]);
+        // tree_cc.push_to_focused_leaf("Camera Controls".to_owned());
+        // let [a, b] = tree.main_surface_mut().split_below(
+        //     NodeIndex::root(),
+        //     0.5,
+        //     vec!["Data Plot".to_owned()],
+        // );
+        // let [_, _] = tree_cc
+        //     .main_surface_mut()
+        //     .split_right(a, 0.8, vec!["Data Log".to_owned()]);
 
         // Example of how to add a new tab.
         // tree.push_to_focused_leaf("Camera Controls".to_owned());
 
-        // // You can modify the tree before constructing the dock
+        // You can modify the tree before constructing the dock
         // let [a, b] = tree.main_surface_mut().split_right(
         //     NodeIndex::root(),
         //     0.5,
@@ -297,6 +402,8 @@ impl Default for GenCamGUI {
         
         Self {
             tree,
+            // tree_cc,
+            // tree_dl,
             tabs,
             ucids_tabs: Vec::new(),
 

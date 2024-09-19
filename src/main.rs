@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use egui::load::SizedTexture;
 use refimage::{DynamicImageData, GenericImage};
-use image::{open, ImageReader};
+use image::{open, DynamicImage, ImageReader};
 
 use eframe::egui;
 use eframe::egui::{Margin, Visuals};
@@ -132,16 +132,19 @@ struct GUITab {
     node: NodeIndex,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct GenCamTabsViewer {
     modal_active: bool,
     num_cameras: u32,
     // List of camera IDs
 
     // HashMap<UCID, CamData>
+    comms_stream: Option<TcpStream>,
+    comms_buffer: [u8; 4096],
+    server_connection: bool,
     connected_cameras: HashMap<String, CamData>,
 
-    data: Bytes,
+    data: Option<Bytes>,
     uri: String,
 
     frame: egui::Frame,
@@ -194,16 +197,21 @@ impl egui_dock::TabViewer for GenCamTabsViewer {
 
 impl GenCamTabsViewer {
     fn new(path: &str) -> Self {
-        let img = image::open(path).unwrap().to_rgb8();
-        let mut data = Cursor::new(Vec::new());
-        img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+        // let img = image::open(path).unwrap().to_rgb8();
+        // let mut data = Cursor::new(Vec::new());
+        // img.write_to(&mut data, image::ImageFormat::Png).unwrap();
 
         Self {
             modal_active: false,
             num_cameras: 0,
+
+            comms_stream: None,
+            comms_buffer: [0; 4096],
+            server_connection: false,
+
             connected_cameras: HashMap::new(),
 
-            data: data.into_inner().into(),
+            data: None,
             uri: "image/png".into(),
 
             frame: egui::Frame {
@@ -223,49 +231,60 @@ impl GenCamTabsViewer {
         }
     }
 
-    // This is a TEST.
-    fn acquire(&mut self) {
-        // Acquire image from the test server.
-        let mut stream = TcpStream::connect("127.0.0.1:50042").expect("Failed to connect to server.");
+    fn add_camera(&mut self) {
+        // Add a new camera to the list.
+        self.num_cameras += 1;
+        self.connected_cameras.insert(self.num_cameras.to_string(), CamData { name: format!("Example Camera #{}", self.num_cameras) });
+    }
+
+    fn connect_to_server(&mut self) -> std::io::Result<()> {
+        let mut stream = TcpStream::connect("127.0.0.1:50042")?;
         let mut buffer = [0; 4096];
         
-        let _ = stream.read(&mut buffer[..]).expect("Failed to read from stream.");
-    
+        let _ = stream.read(&mut buffer[..])?;
         println!("Rxed Msg (Exp. Hello): {}", str::from_utf8(&buffer).unwrap());
-    
-        // Image transfer.
-        stream.write_all(b"SEND IMAGE TEST").expect("Failed to write to stream.");
-        let _ = stream.read(&mut buffer[..]).expect("Failed to read from stream.");
+
+        self.server_connection = true;
+
+        self.comms_stream = Some(stream);
+
+        Ok(())
+    }
+
+    fn receive_test_image(&mut self) -> std::io::Result<()> {
+        let mut stream = self.comms_stream.as_ref().unwrap();
+        let mut buffer = [0; 4096];
+
+        // Image test transfer.
+        stream.write_all(b"SEND IMAGE TEST")?;
+        let _ = stream.read(&mut buffer[..])?;
         println!("Rxed Msg (Exp. SEND IMAGE TEST): {}", str::from_utf8(&buffer).unwrap());
-    
-        // Set our image data as the retrieved image.
-        self.data = Bytes::from(buffer.to_vec());
 
         // RX and deserialize...
         let rimg: GenericImageOwned = serde_json::from_str(str::from_utf8(&buffer).unwrap().trim_end_matches(char::from(0))).unwrap(); // Deserialize to generic image.
         println!("{:?}", rimg.get_metadata());
         println!("{:?}", rimg.get_image());
-    
-        // rimg.write_fits(Path::new("received.fits"), refimage::FitsCompression::None, true).unwrap();
-    
-        // Complete communications with server.
-        stream.write_all(b"END COMMS").expect("Failed to write to stream.");
+        let img: DynamicImage = rimg.get_image().clone().try_into().expect("Could not convert image");
+
+        let mut data = Cursor::new(Vec::new());
+        img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+        self.data = Some(data.into_inner().into());
+
+        Ok(())
     }
 
     fn tab_device_list(&mut self, ui: &mut egui::Ui) {
         ui.label("This is tab 1.");
+
+        if ui.button("Connect to Server").clicked() {
+            self.connect_to_server();
+        }
 
         // TODO: Replace this button with the intended connection functionality.
         if ui.button("Add Camera").on_hover_text("Add a new camera to the list.").clicked() {
             self.add_camera();
         }
         
-    }
-    
-    fn add_camera(&mut self) {
-        // Add a new camera to the list.
-        self.num_cameras += 1;
-        self.connected_cameras.insert(self.num_cameras.to_string(), CamData { name: format!("Example Camera #{}", self.num_cameras) });
     }
     
     // Camera Control tab UI.
@@ -294,11 +313,15 @@ impl GenCamTabsViewer {
             col[0].vertical(|ui| {
                 // Here we show the image data.
                 self.frame.show(ui, |ui| {
-                    ui.add(
-                        egui::Image::new(ImageSource::Bytes { uri: self.uri.clone().into(), bytes: self.data.clone() })
-                        .rounding(10.0)
-                        .fit_to_original_size(1.0)
-                    );
+                    if let Some(data) = &self.data {
+                        ui.add(
+                            egui::Image::new(ImageSource::Bytes { uri: self.uri.clone().into(), bytes: data.clone() })
+                            .rounding(10.0)
+                            .fit_to_original_size(1.0)
+                        );
+                    } else {
+                        ui.label("No image data.");
+                    }
                 });
     
                 self.frame.show(ui, |ui| {
@@ -311,7 +334,7 @@ impl GenCamTabsViewer {
                             let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
                             let mut data = Cursor::new(Vec::new());
                             img.write_to(&mut data, image::ImageFormat::Png).unwrap();
-                            self.data = data.into_inner().into();
+                            self.data = Some(data.into_inner().into());
                         }
                 
                         if ui.button("Reload Image").on_hover_text("Refresh the image to reflect changed data.").clicked() {
@@ -320,7 +343,7 @@ impl GenCamTabsViewer {
                 
                         if ui.button("Nuke Image").on_hover_text("Set all bytes to 0x0.").clicked() {
                             // Change all values in self.data to 0.
-                            self.data = Bytes::from(vec![0; self.data.len()]);
+                            self.data.take();
                 
                             ui.ctx().forget_image(&self.uri.clone());
                         }
@@ -336,7 +359,7 @@ impl GenCamTabsViewer {
                         ui.label("This is a collapsible section.");
                         if ui.button("Acquire Image").on_hover_text("Acquire an image from the camera.").clicked() {
                             // Acquire image.
-                            self.acquire();
+                            self.receive_test_image();
                         }
                     });
                 }); 
@@ -367,9 +390,13 @@ impl GenCamTabsViewer {
                 }); 
             });
         });
-    
-        let sum: i64 = self.data.iter().map(|&x| x as i64).sum();
-        ui.label(format!("{}", sum));
+        
+        if let Some(data) = &self.data {
+            let sum: i64 = data.iter().map(|&x| x as i64).sum();
+            ui.label(format!("{}", sum));
+        } else {
+            ui.label("No image data.");
+        }
 
         // Image controls
         egui::Frame::default()
@@ -384,7 +411,7 @@ impl GenCamTabsViewer {
 
     }
 }
-#[derive(Clone)]
+// #[derive(Clone)]
 struct GenCamGUI {
     tabs: GenCamTabsViewer,
     tree: DockState<String>,

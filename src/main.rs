@@ -22,7 +22,7 @@ use core::str;
 use std::io::prelude::*;
 use std::net::TcpStream;
 
-use refimage::{FitsWrite, GenericImage, GenericImageOwned};
+use refimage::{GenericImageOwned};
 use std::path::Path;
 
 // When compiling natively:
@@ -242,12 +242,11 @@ impl GenCamTabsViewer {
         self.data = Bytes::from(buffer.to_vec());
 
         // RX and deserialize...
-        let rimg: GenericImage = serde_json::from_str(str::from_utf8(&buffer).unwrap().trim_end_matches(char::from(0))).unwrap(); // Deserialize to generic image.
-        let rimg: GenericImageOwned = rimg.into(); // convert to GenericImageOwned
+        let rimg: GenericImageOwned = serde_json::from_str(str::from_utf8(&buffer).unwrap().trim_end_matches(char::from(0))).unwrap(); // Deserialize to generic image.
         println!("{:?}", rimg.get_metadata());
         println!("{:?}", rimg.get_image());
     
-        rimg.write_fits(Path::new("received.fits"), refimage::FitsCompression::None, true).unwrap();
+        // rimg.write_fits(Path::new("received.fits"), refimage::FitsCompression::None, true).unwrap();
     
         // Complete communications with server.
         stream.write_all(b"END COMMS")?;

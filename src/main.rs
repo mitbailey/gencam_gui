@@ -226,16 +226,16 @@ impl GenCamTabsViewer {
     // This is a TEST.
     fn acquire(&mut self) {
         // Acquire image from the test server.
-        let mut stream = TcpStream::connect("127.0.0.1:50042")?;
+        let mut stream = TcpStream::connect("127.0.0.1:50042").expect("Failed to connect to server.");
         let mut buffer = [0; 4096];
         
-        let _ = stream.read(&mut buffer[..])?;
+        let _ = stream.read(&mut buffer[..]).expect("Failed to read from stream.");
     
         println!("Rxed Msg (Exp. Hello): {}", str::from_utf8(&buffer).unwrap());
     
         // Image transfer.
-        stream.write_all(b"SEND IMAGE TEST")?;
-        let _ = stream.read(&mut buffer[..])?;
+        stream.write_all(b"SEND IMAGE TEST").expect("Failed to write to stream.");
+        let _ = stream.read(&mut buffer[..]).expect("Failed to read from stream.");
         println!("Rxed Msg (Exp. SEND IMAGE TEST): {}", str::from_utf8(&buffer).unwrap());
     
         // Set our image data as the retrieved image.
@@ -249,7 +249,7 @@ impl GenCamTabsViewer {
         // rimg.write_fits(Path::new("received.fits"), refimage::FitsCompression::None, true).unwrap();
     
         // Complete communications with server.
-        stream.write_all(b"END COMMS")?;
+        stream.write_all(b"END COMMS").expect("Failed to write to stream.");
     }
 
     fn tab_device_list(&mut self, ui: &mut egui::Ui) {

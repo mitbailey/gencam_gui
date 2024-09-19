@@ -18,6 +18,13 @@ use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use eframe::egui::{load::Bytes};
 use std::io::Cursor;
 
+use core::str;
+use std::io::prelude::*;
+use std::net::TcpStream;
+
+use refimage::{FitsWrite, GenericImage, GenericImageOwned};
+use std::path::Path;
+
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -216,6 +223,36 @@ impl GenCamTabsViewer {
         }
     }
 
+    // This is a TEST.
+    fn acquire(&mut self) {
+        // Acquire image from the test server.
+        let mut stream = TcpStream::connect("127.0.0.1:50042")?;
+        let mut buffer = [0; 4096];
+        
+        let _ = stream.read(&mut buffer[..])?;
+    
+        println!("Rxed Msg (Exp. Hello): {}", str::from_utf8(&buffer).unwrap());
+    
+        // Image transfer.
+        stream.write_all(b"SEND IMAGE TEST")?;
+        let _ = stream.read(&mut buffer[..])?;
+        println!("Rxed Msg (Exp. SEND IMAGE TEST): {}", str::from_utf8(&buffer).unwrap());
+    
+        // Set our image data as the retrieved image.
+        self.data = Bytes::from(buffer.to_vec());
+
+        // RX and deserialize...
+        let rimg: GenericImage = serde_json::from_str(str::from_utf8(&buffer).unwrap().trim_end_matches(char::from(0))).unwrap(); // Deserialize to generic image.
+        let rimg: GenericImageOwned = rimg.into(); // convert to GenericImageOwned
+        println!("{:?}", rimg.get_metadata());
+        println!("{:?}", rimg.get_image());
+    
+        rimg.write_fits(Path::new("received.fits"), refimage::FitsCompression::None, true).unwrap();
+    
+        // Complete communications with server.
+        stream.write_all(b"END COMMS")?;
+    }
+
     fn tab_device_list(&mut self, ui: &mut egui::Ui) {
         ui.label("This is tab 1.");
 
@@ -298,6 +335,10 @@ impl GenCamTabsViewer {
                 self.frame.show(ui, |ui| {
                     ui.collapsing("GenCam Controls 1", |ui| {
                         ui.label("This is a collapsible section.");
+                        if ui.button("Acquire Image").on_hover_text("Acquire an image from the camera.").clicked() {
+                            // Acquire image.
+                            self.acquire();
+                        }
                     });
                 }); 
 

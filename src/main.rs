@@ -238,6 +238,7 @@ impl GenCamTabsViewer {
     }
 
     fn connect_to_server(&mut self) -> std::io::Result<()> {
+        println!("Attempting connection to server...");
         let mut stream = TcpStream::connect("127.0.0.1:50042")?;
         let mut buffer = [0; 4096];
         
@@ -278,6 +279,12 @@ impl GenCamTabsViewer {
 
         if ui.button("Connect to Server").clicked() {
             self.connect_to_server();
+        }
+
+        if self.server_connection {
+            ui.label("Connected to server.");
+        } else {
+            ui.label("Not connected to server.");
         }
 
         // TODO: Replace this button with the intended connection functionality.

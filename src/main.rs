@@ -68,7 +68,7 @@ fn main() {
                 Box::new(|cc| {
                     // This gives us image support:
                     egui_extras::install_image_loaders(&cc.egui_ctx);
-                    Ok(Box::<Mcs>::default())
+                    Ok(Box::<GenCamGUI>::default())
                 }),
             )
             .await;

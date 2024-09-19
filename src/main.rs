@@ -15,7 +15,7 @@ use eframe::egui::{Margin, Visuals};
 use egui::{menu, ImageSource};
 use egui::{Frame, Widget, Id, Image};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
-use eframe::egui::{load::Bytes};
+use eframe::egui::load::Bytes;
 use std::io::Cursor;
 
 use core::str;

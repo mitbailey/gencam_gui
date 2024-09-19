@@ -26,8 +26,8 @@ egui_extras = {version = "0.28.1", features = ["all_loaders"] }
 image = { version = "0.25.2", features = ["jpeg", "png"] }
 egui_plot = "0.28.1"
 egui_dock = "0.13.0"
-generic-camera = { path = "../../generic_camera" }
-refimage = { path = "../../refimage", features = ["image", "fitsio"]  }
+generic-camera = { path = "../generic_camera" }
+refimage = { path = "../refimage", features = ["image", "fitsio"]  }
 serde_json = "1.0.128"
 
 # native:

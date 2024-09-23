@@ -14,8 +14,15 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-egui = "0.28"
-eframe = { version = "0.28", default-features = false, features = [
+# egui = "0.28"
+egui = { path = "../egui-forks/egui-master-1603f05/crates/egui" }
+# eframe = { version = "0.28", default-features = false, features = [
+#     "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
+#     "default_fonts", # Embed the default egui fonts.
+#     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+#     "persistence",   # Enable restoring app state when restarting the app.
+# ] }
+eframe = { path = "../egui-forks/egui-master-1603f05/crates/eframe", default-features = false, features = [
     "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
@@ -25,13 +32,15 @@ log = "0.4"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
-egui_extras = {version = "0.28.1", features = ["all_loaders"] }
+# egui_extras = {version = "0.28.1", features = ["all_loaders"] }
+egui_extras = { path = "../egui-forks/egui-master-1603f05/crates/egui_extras", features = ["all_loaders"] }
 image = { version = "0.25.2", features = ["jpeg", "png"] }
 egui_plot = "0.28.1"
 egui_dock = "0.13.0"
 generic-camera = { version = "0.0.4" }
 refimage = { version = "0.5", features = ["rayon", "serde_flate", "image"]  } # fitsio can not be enabled for wasm
 serde_json = "1.0.128"
+ewebsock = "0.6.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -47,7 +56,7 @@ getrandom = { version = "0.2", features = ["js"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 # HACK: pin web-sys to <0.3.70 until a new `eframe` is released containing
 # the following PR: https://github.com/emilk/egui/pull/4980
-version = ">= 0.3.4, < 0.3.70"
+version = ">= 0.3.4, <= 0.3.70"
 
 [profile.release]
 opt-level = 2 # fast and small wasm

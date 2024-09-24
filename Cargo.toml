@@ -10,6 +10,9 @@ rust-version = "1.80"
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 egui = "0.28"
 eframe = { version = "0.28", default-features = false, features = [
@@ -26,7 +29,7 @@ egui_extras = {version = "0.28.1", features = ["all_loaders"] }
 image = { version = "0.25.2", features = ["jpeg", "png"] }
 egui_plot = "0.28.1"
 egui_dock = "0.13.0"
-generic-camera = { path = "../generic_camera" }
+generic-camera = { version = "0.0.4" }
 refimage = { version = "0.5", features = ["rayon", "serde_flate", "image"]  } # fitsio can not be enabled for wasm
 serde_json = "1.0.128"
 
@@ -36,6 +39,7 @@ env_logger = "0.10"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.93"
 wasm-bindgen-futures = "0.4"
 getrandom = { version = "0.2", features = ["js"] }
 

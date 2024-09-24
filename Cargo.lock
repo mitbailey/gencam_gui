@@ -1526,9 +1526,10 @@ dependencies = [
  "getrandom",
  "image",
  "log",
- "refimage",
+ "refimage 0.5.1",
  "serde",
  "serde_json",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -1545,11 +1546,12 @@ dependencies = [
 
 [[package]]
 name = "generic-camera"
-version = "0.0.2"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed2fdeeaf7bf85480da8997cb94848da3831e7e6e4f64b2ef7c2979a6dfef7ac"
 dependencies = [
  "documented",
- "rand",
- "refimage",
+ "refimage 0.8.2",
  "serde",
  "thiserror",
 ]
@@ -1882,6 +1884,15 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -2786,7 +2797,7 @@ dependencies = [
  "built",
  "cfg-if",
  "interpolate_name",
- "itertools",
+ "itertools 0.12.1",
  "libc",
  "libfuzzer-sys",
  "log",
@@ -2911,6 +2922,21 @@ dependencies = [
  "num-traits",
  "quick-error",
  "rayon",
+ "serde",
+]
+
+[[package]]
+name = "refimage"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd62e9bad7a4e3024fac70b38fe3b346599d8232ac4101aa30960c42f019f1c3"
+dependencies = [
+ "bytemuck",
+ "chrono",
+ "crc32fast",
+ "itertools 0.13.0",
+ "num-traits",
+ "quick-error",
  "serde",
 ]
 

@@ -1070,9 +1070,11 @@ dependencies = [
 [[package]]
 name = "egui_dock"
 version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "629a8b0e440d69996795669ceacc0dd839a997843489273600d31d16c9cb3500"
 dependencies = [
  "duplicate",
- "egui 0.28.1",
+ "egui 0.28.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste",
 ]
 
@@ -1107,6 +1109,8 @@ dependencies = [
 [[package]]
 name = "egui_plot"
 version = "0.28.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7acc4fe778c41b91d57e04c1a2cf5765b3dc977f9f8384d2bb2eb4254855365"
 dependencies = [
  "ahash",
  "egui 0.28.1 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -1561,7 +1561,7 @@ dependencies = [
  "getrandom",
  "image",
  "log",
- "refimage 0.5.1",
+ "refimage 0.11.0",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -2962,23 +2962,6 @@ dependencies = [
 
 [[package]]
 name = "refimage"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36cb125410839b76f25d35e540acf0c465628362b21336493e458fa619f4aefc"
-dependencies = [
- "bytemuck",
- "chrono",
- "crc32fast",
- "flate2",
- "image",
- "num-traits",
- "quick-error",
- "rayon",
- "serde",
-]
-
-[[package]]
-name = "refimage"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd62e9bad7a4e3024fac70b38fe3b346599d8232ac4101aa30960c42f019f1c3"
@@ -2990,6 +2973,24 @@ dependencies = [
  "num-traits",
  "quick-error",
  "serde",
+]
+
+[[package]]
+name = "refimage"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea1d463ca94c94d6cd9121fe2cf1e96eae46993765ffdd214fcf8354f5c5a875"
+dependencies = [
+ "bytemuck",
+ "chrono",
+ "crc32fast",
+ "flate2",
+ "image",
+ "itertools 0.13.0",
+ "num-traits",
+ "rayon",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

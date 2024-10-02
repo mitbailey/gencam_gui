@@ -7,7 +7,7 @@ use std::vec;
 use std::collections::HashMap;
 
 use egui::load::SizedTexture;
-use refimage::{DynamicImageData, GenericImage};
+use refimage::{GenericImage};
 use image::{open, DynamicImage, ImageReader};
 
 use eframe::egui;
@@ -58,6 +58,7 @@ fn main() -> eframe::Result {
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 

@@ -14,7 +14,12 @@ pub async fn start(canvas: web_sys::HtmlCanvasElement) -> Result<(), JsValue> {
         .start(
             "gui_canvas",
             Default::default(),
-            Box::new(|_cc| Ok(Box::new(app))),
+            // Box::new(|_cc| Ok(Box::new(app))),
+            Box::new(|cc| {
+                // This gives us image support:
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::new(app))
+            }),
         )
         .await?;
     Ok(())

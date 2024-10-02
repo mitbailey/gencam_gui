@@ -7,7 +7,7 @@ use std::vec;
 use std::collections::HashMap;
 
 use egui::load::SizedTexture;
-use refimage::{DynamicImageData, GenericImage};
+use refimage::{GenericImage};
 use image::{open, DynamicImage, ImageReader};
 
 use eframe::egui;
@@ -27,6 +27,8 @@ use refimage::{GenericImageOwned};
 use std::path::Path;
 use circular_buffer::CircularBuffer;
 use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
+
+use refimage::{ImageRef, DynamicImageRef, ColorSpace};
 
 
 struct WsBackend {
@@ -81,11 +83,11 @@ impl WsBackend {
             }
         });
 
-        ui.separator();
-        ui.heading("Received events:");
-        for event in &self.events {
-            ui.label(format!("{event:?}"));
-        }
+        // ui.separator();
+        // ui.heading("Received events:");
+        // for event in &self.events {
+        //     ui.label(format!("{event:?}"));
+        // }
     }
 }
 
@@ -147,6 +149,7 @@ pub struct GenCamGUI {
     pub uri: String,
     pub ws: Option<WsBackend>,
     pub ctx: Option<egui::Context>,
+    last_data: Vec<u8>,
 }
 
 impl Default for GenCamGUI {
@@ -188,6 +191,7 @@ impl Default for GenCamGUI {
             uri: "ws://localhost:9001".into(),
             ws: None,
             ctx: None,
+            last_data: Vec::new(),
         }
     }
 }
@@ -316,6 +320,49 @@ impl GenCamGUI {
             .clone()
             .try_into()
             .expect("Could not convert image");
+
+        let mut data = Cursor::new(Vec::new());
+        img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+        self.data = Some(data.into_inner().into());
+
+        Ok(())
+    }
+
+    // Assuems the last binary data we received is a valid image (change this later).
+    fn update_test_image(&mut self) -> std::io::Result<()> {
+        // self.msg_list.push_back("Attempting to update image...".to_owned());
+        // let mut stream = self.comms_stream.as_ref().unwrap();
+        // let mut buffer = [0; 4096];
+        
+        // self.msg_list.push_back("Writing to server.".to_owned());
+        // // Image test transfer.
+        // stream.write_all(b"SEND IMAGE TEST")?;
+        // let _ = stream.read(&mut buffer[..])?;
+        // println!(
+        //     "Rxed Msg (Exp. SEND IMAGE TEST): {}",
+        //     str::from_utf8(&buffer).unwrap()
+        // );
+
+        // RX and deserialize...
+        let img = ImageRef::new(&mut self.last_data, 256, 256, ColorSpace::Rgb).unwrap();
+        let img = DynamicImageRef::from(img);
+        // let rimg = GenericImageOwned::new(std::time::SystemTime::now(), (&img).into());
+        
+        let img: DynamicImage = img.try_into().expect("Could not convert image");
+
+        // let rimg: GenericImageOwned = serde_json::from_str(
+        //     str::from_utf8(&buffer)
+        //         .unwrap()
+        //         .trim_end_matches(char::from(0)),
+        // )
+        // .unwrap(); // Deserialize to generic image.
+        // println!("{:?}", rimg.get_metadata());
+        // println!("{:?}", rimg.get_image());
+        // let img: DynamicImage = rimg
+        //     .get_image()
+        //     .clone()
+        //     .try_into()
+        //     .expect("Could not convert image");
 
         let mut data = Cursor::new(Vec::new());
         img.write_to(&mut data, image::ImageFormat::Png).unwrap();
@@ -480,10 +527,46 @@ impl GenCamGUI {
                             "{:?}",
                             (w_view / (8.0 / w_scale))..=(w_view / (4.0 / w_scale))
                         ));
-                        ui.label("Right Panel");
+
+                        ui.label("Messages");
                         for msg in self.msg_list.iter() {
                             ui.add(egui::Label::new(msg).truncate());
                         }
+
+                        ui.label("Events");
+
+                        match &self.ws {
+                            None => {
+                                ui.label("No websocket connection.");
+                            }
+                            Some(ws) => {
+                                let events_list = self.ws.as_ref().unwrap().events.clone(); 
+                                for event in events_list.iter() {
+
+                                    // We now need to extract binary data, if we received any. Thats what this is for.
+                                    match event {
+                                        WsEvent::Opened => {}
+                                        WsEvent::Message(ws_message) => {
+                                            match ws_message {
+                                                WsMessage::Text(_) => {}
+                                                WsMessage::Binary(data) => {
+                                                    // This is how we extract the data from an event.
+                                                    self.last_data = data.clone();
+                                                },
+                                                WsMessage::Unknown(_) => {}
+                                                WsMessage::Ping(_) => {}
+                                                WsMessage::Pong(_) => {}
+                                            }
+                                        },
+                                        WsEvent::Error(_) => {}
+                                        WsEvent::Closed => {}
+                                    }
+                                    
+                                    ui.add(egui::Label::new(format!("{:?}", event.clone())).truncate());
+                                }
+                            }
+                        }
+
                 });
             });
     }
@@ -546,10 +629,11 @@ impl GenCamGUI {
                                 .on_hover_text("Swap the image data.")
                                 .clicked()
                             {
-                                let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
-                                let mut data = Cursor::new(Vec::new());
-                                img.write_to(&mut data, image::ImageFormat::Png).unwrap();
-                                self.data = Some(data.into_inner().into());
+                                self.update_test_image();
+                                // let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
+                                // let mut data = Cursor::new(Vec::new());
+                                // img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+                                // self.data = Some(data.into_inner().into());
                             }
 
                             if ui

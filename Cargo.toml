@@ -34,6 +34,7 @@ refimage = { version = "0.11", features = ["rayon", "serde_flate", "image"]  } #
 serde_json = "1.0.128"
 circular-buffer = "0.1.9"
 ewebsock = "0.6.0"
+gencam_packet = { path = "../gencam_packet" }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -16,6 +16,7 @@ use egui::{menu, ImageSource};
 use egui::{Frame, Widget, Id, Image};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use eframe::egui::load::Bytes;
+use serde::Serialize;
 use std::io::Cursor;
 use egui::Ui;
 
@@ -29,12 +30,15 @@ use circular_buffer::CircularBuffer;
 use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
 
 use refimage::{ImageRef, DynamicImageRef, ColorSpace};
-
+use gencam_packet::{GenCamPacket, PacketType};
+use std::sync::atomic::AtomicBool;
 
 struct WsBackend {
     ws_sender: WsSender,
     ws_receiver: WsReceiver,
     events: Vec<WsEvent>,
+    pub image_events: Vec<WsEvent>,
+    pub new_image_event: AtomicBool,
     message: String,
 }
 
@@ -53,6 +57,8 @@ impl WsBackend {
                     ws_sender,
                     ws_receiver,
                     events: Vec::new(),
+                    image_events: Vec::new(),
+                    new_image_event: AtomicBool::new(false),
                     message: String::new(),
                 };
                 Some(ws)
@@ -69,25 +75,52 @@ impl WsBackend {
     }
 
     fn ui(&mut self, ui: &mut Ui) {
+        // Push any event to either the general event vector or the image vector.
         while let Some(event) = self.ws_receiver.try_recv() {
-            self.events.push(event);
+            match event.clone() {
+                WsEvent::Message(WsMessage::Binary(data)) => { // All messages should be binary
+                    let pkt: GenCamPacket = serde_json::from_slice(&data).expect("Failed to deserialize packet.");
+                    match pkt.packet_type {
+                        PacketType::Image => {
+                            self.image_events.push(event);
+                            self.new_image_event = AtomicBool::new(true);
+                        },
+                        _ => {
+                            self.events.push(event);
+                        },
+                    }
+                }
+                _ => {
+                    self.events.push(event);
+                }
+            }
         }
         
         ui.horizontal(|ui| {
-            ui.label("Message to send:");
-            if ui.text_edit_singleline(&mut self.message).lost_focus()
-                && ui.input(|i| i.key_pressed(egui::Key::Enter))
-            {
-                self.ws_sender
-                    .send(WsMessage::Text(std::mem::take(&mut self.message)));
+            if ui.button("Send Ack").clicked() {
+                let pkt = GenCamPacket::new(PacketType::Ack, 0, 0, 0, None);
+                // Set msg to serialized pkt.
+                let msg = serde_json::to_vec(&pkt).unwrap();
+                // Send
+                self.ws_sender.send(WsMessage::Binary(msg));
+            }
+
+            if ui.button("Send NAck").clicked() {
+                let pkt = GenCamPacket::new(PacketType::NAck, 0, 0, 0, None);
+                // Set msg to serialized pkt.
+                let msg = serde_json::to_vec(&pkt).unwrap();
+                // Send
+                self.ws_sender.send(WsMessage::Binary(msg));
+            }
+
+            if ui.button("Send ImgReq").clicked() {
+                let pkt = GenCamPacket::new(PacketType::ImgReq, 0, 0, 0, None);
+                // Set msg to serialized pkt.
+                let msg = serde_json::to_vec(&pkt).unwrap();
+                // Send
+                self.ws_sender.send(WsMessage::Binary(msg));
             }
         });
-
-        // ui.separator();
-        // ui.heading("Received events:");
-        // for event in &self.events {
-        //     ui.label(format!("{event:?}"));
-        // }
     }
 }
 
@@ -343,32 +376,40 @@ impl GenCamGUI {
         //     str::from_utf8(&buffer).unwrap()
         // );
 
-        // RX and deserialize...
-        let img = ImageRef::new(&mut self.last_data, 256, 256, ColorSpace::Rgb).unwrap();
-        let img = DynamicImageRef::from(img);
-        // let rimg = GenericImageOwned::new(std::time::SystemTime::now(), (&img).into());
+        // Cant update if we have no connection
+        if self.ws.is_none() {
+            return Ok(());
+        }
+
+        let binding = self.ws.as_ref().unwrap().image_events.clone();
+        let latest_event = binding.last().unwrap();
         
-        let img: DynamicImage = img.try_into().expect("Could not convert image");
+        match latest_event {
+            WsEvent::Message(WsMessage::Binary(data)) => {
+                // The 'image event' should contain a serialized GenCamPacket. We have to deserialize it to get the image data.
+                let pkt: GenCamPacket = serde_json::from_slice(data).unwrap();
+                let x_dim = pkt.x_dim;
+                let y_dim = pkt.y_dim;
+                let mut img_data = pkt.data.unwrap();
 
-        // let rimg: GenericImageOwned = serde_json::from_str(
-        //     str::from_utf8(&buffer)
-        //         .unwrap()
-        //         .trim_end_matches(char::from(0)),
-        // )
-        // .unwrap(); // Deserialize to generic image.
-        // println!("{:?}", rimg.get_metadata());
-        // println!("{:?}", rimg.get_image());
-        // let img: DynamicImage = rimg
-        //     .get_image()
-        //     .clone()
-        //     .try_into()
-        //     .expect("Could not convert image");
+                // Generic_Image conversions...
+                // RX and deserialize...
+                let img = ImageRef::new(&mut img_data, x_dim as usize, y_dim as usize, ColorSpace::Rgb).unwrap();
+                let img = DynamicImageRef::from(img);
+                
+                let img: DynamicImage = img.try_into().expect("Could not convert image");
+        
+                let mut data = Cursor::new(Vec::new());
+                img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+                self.data = Some(data.into_inner().into());
+        
+                Ok(())
+            },
+            _ => {
+                Ok(())
+            },
+        }
 
-        let mut data = Cursor::new(Vec::new());
-        img.write_to(&mut data, image::ImageFormat::Png).unwrap();
-        self.data = Some(data.into_inner().into());
-
-        Ok(())
     }
     
     fn ui_developer_controls(&mut self, ctx: &egui::Context) {
@@ -543,24 +584,24 @@ impl GenCamGUI {
                                 let events_list = self.ws.as_ref().unwrap().events.clone(); 
                                 for event in events_list.iter() {
 
-                                    // We now need to extract binary data, if we received any. Thats what this is for.
-                                    match event {
-                                        WsEvent::Opened => {}
-                                        WsEvent::Message(ws_message) => {
-                                            match ws_message {
-                                                WsMessage::Text(_) => {}
-                                                WsMessage::Binary(data) => {
-                                                    // This is how we extract the data from an event.
-                                                    self.last_data = data.clone();
-                                                },
-                                                WsMessage::Unknown(_) => {}
-                                                WsMessage::Ping(_) => {}
-                                                WsMessage::Pong(_) => {}
-                                            }
-                                        },
-                                        WsEvent::Error(_) => {}
-                                        WsEvent::Closed => {}
-                                    }
+                                    // // We now need to extract binary data, if we received any. Thats what this is for.
+                                    // match event {
+                                    //     WsEvent::Opened => {}
+                                    //     WsEvent::Message(ws_message) => {
+                                    //         match ws_message {
+                                    //             WsMessage::Text(_) => {}
+                                    //             WsMessage::Binary(data) => {
+                                    //                 // This is how we extract the data from an event.
+                                    //                 self.last_data = data.clone();
+                                    //             },
+                                    //             WsMessage::Unknown(_) => {}
+                                    //             WsMessage::Ping(_) => {}
+                                    //             WsMessage::Pong(_) => {}
+                                    //         }
+                                    //     },
+                                    //     WsEvent::Error(_) => {}
+                                    //     WsEvent::Closed => {}
+                                    // }
                                     
                                     ui.add(egui::Label::new(format!("{:?}", event.clone())).truncate());
                                 }
@@ -763,6 +804,11 @@ impl eframe::App for GenCamGUI {
         //////////////////////////////////////////////////////////////
 
         let w_view = ctx.screen_rect().width();
+
+        if self.ws.is_some() && self.ws.as_ref().unwrap().new_image_event.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            self.update_test_image().unwrap();
+            ctx.forget_image(&self.img_uri.clone());
+        }
 
         self.ui_developer_controls(ctx);
         self.ui_top_bar(ctx);

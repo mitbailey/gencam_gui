@@ -2,8 +2,8 @@ var cacheName = 'egui-template-pwa';
 var filesToCache = [
   './',
   './index.html',
-  './gencam_gui.js',
-  './gencam_gui_bg.wasm',
+  // './gencam_gui.js',
+  // './gencam_gui_bg.wasm',
 ];
 
 /* Start the service worker and cache all of the app's content */

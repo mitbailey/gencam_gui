@@ -1,29 +1,12 @@
+#![deny(missing_docs)]
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-
-use std::any::Any;
-use std::time::SystemTime;
-use std::vec;
-use std::collections::HashMap;
-
-use egui::load::SizedTexture;
-use refimage::{GenericImage};
-use image::{open, DynamicImage, ImageReader};
+//!
+//! # Generic Camera GUI
+//! This is the entry point when natively compiled.
+//!
 
 use eframe::egui;
-use eframe::egui::{Margin, Visuals};
-use egui::{menu, ImageSource};
-use egui::{Frame, Widget, Id, Image};
-use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
-use eframe::egui::load::Bytes;
-use std::io::Cursor;
-
-use core::str;
-use std::io::prelude::*;
-use std::net::TcpStream;
-
-use refimage::{GenericImageOwned};
-use std::path::Path;
 
 // Import gencamgui from app
 use gencam_gui::GenCamGUI;
@@ -53,46 +36,4 @@ fn main() -> eframe::Result {
             Ok(Box::<GenCamGUI>::default())
         }),
     )
-}
-
-// When compiling to web using trunk:
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    
-    // Redirect `log` message to `console.log` and friends:
-    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
-
-    let web_options = eframe::WebOptions::default();
-
-    wasm_bindgen_futures::spawn_local(async {
-        let start_result = eframe::WebRunner::new()
-            .start(
-                "the_canvas_id",
-                web_options,
-                Box::new(|cc| {
-                    // This gives us image support:
-                    egui_extras::install_image_loaders(&cc.egui_ctx);
-                    Ok(Box::<GenCamGUI>::default())
-                }),
-            )
-            .await;
-
-        // Remove the loading text and spinner:
-        let loading_text = web_sys::window()
-            .and_then(|w| w.document())
-            .and_then(|d| d.get_element_by_id("loading_text"));
-        if let Some(loading_text) = loading_text {
-            match start_result {
-                Ok(_) => {
-                    loading_text.remove();
-                }
-                Err(e) => {
-                    loading_text.set_inner_html(
-                        "<p> The app has crashed. See the developer console for details. </p>",
-                    );
-                    panic!("Failed to start eframe: {e:?}");
-                }
-            }
-        }
-    });
 }

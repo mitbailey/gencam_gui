@@ -1,3 +1,9 @@
+#![deny(missing_docs)]
+//!   
+//! # Generic Camera GUI
+//! This is the entry point when compiled to WebAssembly.
+//!  
+
 mod app;
 pub use app::GenCamGUI;
 

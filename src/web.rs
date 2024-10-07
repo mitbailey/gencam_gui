@@ -1,3 +1,9 @@
+#![deny(missing_docs)]
+//!   
+//! # Generic Camera GUI
+//! This is the entry point when compiled to WebAssembly.
+//!   
+
 use eframe::wasm_bindgen::{self, prelude::*};
 
 /// This is the entry-point for all the web-assembly.

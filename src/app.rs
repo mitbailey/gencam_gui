@@ -1,37 +1,24 @@
-#![warn(clippy::all, rust_2018_idioms)]
+#![deny(missing_docs)]
+#![warn(clippy::all)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+//!   
+//! # Generic Camera GUI
+//! This is the entry point when compiled to WebAssembly.
+//!  
 
-use std::any::Any;
-use std::time::SystemTime;
-use std::vec;
 use std::collections::HashMap;
-
-use egui::load::SizedTexture;
-use refimage::{GenericImage};
-use image::{open, DynamicImage, ImageReader};
-
-use eframe::egui;
-use eframe::egui::{Margin, Visuals};
-use egui::{menu, ImageSource};
-use egui::{Frame, Widget, Id, Image};
-use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
-use eframe::egui::load::Bytes;
-use serde::Serialize;
-use std::io::Cursor;
-use egui::Ui;
-
-use core::str;
-use std::io::prelude::*;
+use std::io::{Cursor, prelude::*};
 use std::net::TcpStream;
-
-use refimage::{GenericImageOwned};
-use std::path::Path;
-use circular_buffer::CircularBuffer;
-use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
-
-use refimage::{ImageRef, DynamicImageRef, ColorSpace};
-use gencam_packet::{GenCamPacket, PacketType};
 use std::sync::atomic::AtomicBool;
+use core::str;
+use image::DynamicImage;
+use refimage::{GenericImageOwned, ImageRef, DynamicImageRef, ColorSpace};
+use eframe::egui;
+use eframe::egui::{Visuals, load::Bytes};
+use egui::{menu, ImageSource, Ui};
+use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
+use circular_buffer::CircularBuffer;
+use gencam_packet::{GenCamPacket, PacketType};
 
 struct WsBackend {
     ws_sender: WsSender,
@@ -150,26 +137,18 @@ struct CamData {
 }
 
 // #[derive(Clone)]
+/// Structure to hold all of the GUI data.
 pub struct GenCamGUI {
-    // tabs: GenCamTabsViewer,
-    // tree: DockState<String>,
-    // tree_cc: DockState<String>, // Tree for Camera Controls tabs.
-    // tree_dl: DockState<String>, // Tree for Device List tabs.
-    // ucids_tabs: Vec<String>,
-
     dialog_type: DialogType,
     modal_message: String,
     dark_mode: bool,
 
     modal_active: bool,
-    // num_cameras: u32,
-    // List of camera IDs
 
-    // HashMap<UCID, CamData>
     comms_stream: Option<TcpStream>,
-    comms_buffer: [u8; 4096],
-    server_connection: bool,
-    connected_cameras: HashMap<String, CamData>,
+    // comms_buffer: [u8; 4096],
+    // server_connection: bool,
+    // connected_cameras: HashMap<String, CamData>,
 
     data: Option<Bytes>,
     img_uri: String,
@@ -179,10 +158,12 @@ pub struct GenCamGUI {
     msg_list: CircularBuffer<150, String>,
 
     // Websocket
+    /// The URI of the websocket server.
     pub uri: String,
+    /// The websocket backend.
     pub ws: Option<WsBackend>,
+    /// The egui context.
     pub ctx: Option<egui::Context>,
-    last_data: Vec<u8>,
 }
 
 impl Default for GenCamGUI {
@@ -197,10 +178,10 @@ impl Default for GenCamGUI {
             modal_active: false,
 
             comms_stream: None,
-            comms_buffer: [0; 4096],
-            server_connection: false,
+            // comms_buffer: [0; 4096],
+            // server_connection: false,
 
-            connected_cameras: HashMap::new(),
+            // connected_cameras: HashMap::new(),
 
             data: None,
             img_uri: "image/png".into(),
@@ -216,7 +197,7 @@ impl Default for GenCamGUI {
                 //     spread: 0.0,
                 //     color: egui::Color32::from_black_alpha(245),
                 // },
-                fill: egui::Color32::from_white_alpha(255),
+                fill: egui::Color32::from_white_alpha(0),
                 stroke: egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
             },
 
@@ -224,7 +205,6 @@ impl Default for GenCamGUI {
             uri: "ws://localhost:9001".into(),
             ws: None,
             ctx: None,
-            last_data: Vec::new(),
         }
     }
 }
@@ -307,23 +287,23 @@ impl GenCamGUI {
             });
     }
 
-    fn connect_to_server(&mut self) -> std::io::Result<()> {
-        println!("Attempting connection to server...");
-        let mut stream = TcpStream::connect("127.0.0.1:50042")?;
-        let mut buffer = [0; 4096];
+    // fn connect_to_server(&mut self) -> std::io::Result<()> {
+    //     println!("Attempting connection to server...");
+    //     let mut stream = TcpStream::connect("127.0.0.1:50042")?;
+    //     let mut buffer = [0; 4096];
 
-        let _ = stream.read(&mut buffer[..])?;
-        println!(
-            "Rxed Msg (Exp. Hello): {}",
-            str::from_utf8(&buffer).unwrap()
-        );
+    //     let _ = stream.read(&mut buffer[..])?;
+    //     println!(
+    //         "Rxed Msg (Exp. Hello): {}",
+    //         str::from_utf8(&buffer).unwrap()
+    //     );
 
-        self.server_connection = true;
+    //     // self.server_connection = true;
 
-        self.comms_stream = Some(stream);
+    //     self.comms_stream = Some(stream);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn receive_test_image(&mut self) -> std::io::Result<()> {
         self.msg_list.push_back("Attempting to receive image...".to_owned());
@@ -551,6 +531,69 @@ impl GenCamGUI {
             .width_range(w_view / (8.0 / w_scale)..=w_view / (2.0 / w_scale))
             .default_width(ctx.available_rect().width() / (6.0 / w_scale))
             .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    
+                    self.frame.show(ui, |ui| {
+                        egui::CollapsingHeader::new("GenCam Controls 1")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.separator();
+                                ui.label("This is a collapsible section.");
+                                if ui
+                                    .button("Acquire Image")
+                                    .on_hover_text("Acquire an image from the camera.")
+                                    .clicked()
+                                {
+                                    // Acquire image.
+                                    self.receive_test_image().expect("Failed to receive image.");
+                                }
+                            });
+                    });
+
+                    self.frame.show(ui, |ui| {
+                        egui::CollapsingHeader::new("GenCam Controls 2")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.separator();
+                                ui.label("This is a collapsible section.");
+                            });
+                    });
+
+                    self.frame.show(ui, |ui| {
+                        egui::CollapsingHeader::new("Non-GenCam Controls")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.separator();
+                                ui.label("This is a collapsible section.");
+                                if ui
+                                    .button("Get Exposure")
+                                    .on_hover_text("On hover text TBD.")
+                                    .clicked()
+                                {
+                                    // Get exposure value.
+                                }
+                                if ui
+                                    .button("Set Exposure")
+                                    .on_hover_text("On hover text TBD.")
+                                    .clicked()
+                                {
+                                    // Set exposure value.
+                                }
+                                ui.checkbox(&mut true, "Enable Auto-Exposure");
+                            });
+                    });
+
+                    self.frame.show(ui, |ui| {
+                        egui::CollapsingHeader::new("GenCam Controls 1")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.separator();
+                                ui.label("This is a collapsible section.");
+                            });
+                    });
+
+                });
+
                 ui.set_enabled(!self.modal_active);
                 ui.label("Communication Log");
                 ui.separator(); // Placeholder to enable dragging (expands to fill).
@@ -580,30 +623,18 @@ impl GenCamGUI {
                             None => {
                                 ui.label("No websocket connection.");
                             }
-                            Some(ws) => {
+                            Some(_) => {
                                 let events_list = self.ws.as_ref().unwrap().events.clone(); 
-                                for event in events_list.iter() {
-
-                                    // // We now need to extract binary data, if we received any. Thats what this is for.
-                                    // match event {
-                                    //     WsEvent::Opened => {}
-                                    //     WsEvent::Message(ws_message) => {
-                                    //         match ws_message {
-                                    //             WsMessage::Text(_) => {}
-                                    //             WsMessage::Binary(data) => {
-                                    //                 // This is how we extract the data from an event.
-                                    //                 self.last_data = data.clone();
-                                    //             },
-                                    //             WsMessage::Unknown(_) => {}
-                                    //             WsMessage::Ping(_) => {}
-                                    //             WsMessage::Pong(_) => {}
-                                    //         }
-                                    //     },
-                                    //     WsEvent::Error(_) => {}
-                                    //     WsEvent::Closed => {}
-                                    // }
-                                    
-                                    ui.add(egui::Label::new(format!("{:?}", event.clone())).truncate());
+                                for event in events_list.iter() {   
+                                    match event {
+                                        WsEvent::Message(WsMessage::Binary(data)) => {
+                                            let pkt: GenCamPacket = serde_json::from_slice(data).expect("Failed to deserialize packet.");
+                                            ui.add(egui::Label::new(format!("{:?}", pkt)).truncate());
+                                        }
+                                        _ => {
+                                            ui.add(egui::Label::new(format!("{:?}", event.clone())).truncate());
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -614,142 +645,182 @@ impl GenCamGUI {
 
     fn ui_central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Test.");
-            ui.label(format!("Avail   {:?}", ctx.available_rect()));
-            ui.label(format!("Used    {:?}", ctx.used_rect()));
-            ui.label(format!("Screen  {:?}", ctx.screen_rect()));
+            // ui.label("Test.");
+            // ui.label(format!("Avail   {:?}", ctx.available_rect()));
+            // ui.label(format!("Used    {:?}", ctx.used_rect()));
+            // ui.label(format!("Screen  {:?}", ctx.screen_rect()));
 
-            let winsize = ui.ctx().input(|i: &egui::InputState| i.screen_rect());
-            let win_width = winsize.width();
-            let win_height = winsize.height();
+            // let winsize = ui.ctx().input(|i: &egui::InputState| i.screen_rect());
+            // let win_width = winsize.width();
+            // let win_height = winsize.height();
 
-            ui.label(format!(
-                "The window size is: {} x {}",
-                win_width, win_height
-            ));
+            // ui.label(format!(
+            //     "The window size is: {} x {}",
+            //     win_width, win_height
+            // ));
 
-            // TODO: Handle the fact that each camera control tab will be a separate camera. Will involve using the tab ID (UTID) to look up the camera in the hashmap.
-
-            // ui.label(format!("This tab has Unique Tab ID {}", utid));
-            // ui.label(format!("{:?}", self.connected_cameras.get(utid)));
-
-            // egui::TopBottomPanel::bottom("status_panel").show(ui.ctx(), |ui| {
-            //     ui.label(format!("Hello world from {}!", utid));
-            // });
-
-            ui.columns(2, |col| {
-                // When inside a layout closure within the column we can just use 'ui'.
-
-                // FIRST COLUMN
-                col[0].label("First column");
-                col[0].vertical(|ui| {
-                    // Here we show the image data.
-                    self.frame.show(ui, |ui| {
-                        if let Some(data) = &self.data {
-                            ui.add(
-                                egui::Image::new(ImageSource::Bytes {
-                                    uri: self.img_uri.clone().into(),
-                                    bytes: data.clone(),
-                                })
-                                .rounding(10.0)
-                                .fit_to_original_size(1.0),
-                            );
-                        } else {
-                            ui.label("No image data.");
-                        }
-                    });
-
-                    self.frame.show(ui, |ui| {
-                        ui.label("Image Controls");
-
-                        ui.horizontal_wrapped(|ui: &mut egui::Ui| {
-                            // Examples / tests on on-the-fly image manipulation.
-                            // Button
-                            if ui
-                                .button("Swap Image")
-                                .on_hover_text("Swap the image data.")
-                                .clicked()
-                            {
-                                self.update_test_image();
-                                // let img = image::open("res/Gcg_Warning.png").unwrap().to_rgb8();
-                                // let mut data = Cursor::new(Vec::new());
-                                // img.write_to(&mut data, image::ImageFormat::Png).unwrap();
-                                // self.data = Some(data.into_inner().into());
-                            }
-
-                            if ui
-                                .button("Reload Image")
-                                .on_hover_text("Refresh the image to reflect changed data.")
-                                .clicked()
-                            {
-                                ui.ctx().forget_image(&self.img_uri.clone());
-                            }
-
-                            if ui
-                                .button("Nuke Image")
-                                .on_hover_text("Set all bytes to 0x0.")
-                                .clicked()
-                            {
-                                // Change all values in self.data to 0.
-                                self.data.take();
-
-                                ui.ctx().forget_image(&self.img_uri.clone());
-                            }
-                        });
-                    });
+            ui.vertical(|ui| {
+                // Here we show the image data.
+                self.frame.show(ui, |ui| {
+                    if let Some(data) = &self.data {
+                        ui.add(
+                            egui::Image::new(ImageSource::Bytes {
+                                uri: self.img_uri.clone().into(),
+                                bytes: data.clone(),
+                            })
+                            .rounding(10.0)
+                            // .fit_to_original_size(1.0),
+                        );
+                    } else {
+                        ui.label("No image data.");
+                    }
                 });
 
-                // SECOND COLUMN
-                col[1].label("Second column");
-                col[1].vertical(|ui| {
-                    self.frame.show(ui, |ui| {
-                        ui.collapsing("GenCam Controls 1", |ui| {
-                            ui.label("This is a collapsible section.");
-                            if ui
-                                .button("Acquire Image")
-                                .on_hover_text("Acquire an image from the camera.")
-                                .clicked()
-                            {
-                                // Acquire image.
-                                self.receive_test_image();
-                            }
-                        });
-                    });
+                self.frame.show(ui, |ui| {
+                    ui.label("Image Controls");
 
-                    self.frame.show(ui, |ui| {
-                        ui.collapsing("GenCam Controls 2", |ui| {
-                            ui.label("This is a collapsible section.");
-                        });
-                    });
+                    ui.horizontal_wrapped(|ui: &mut egui::Ui| {
+                        // Examples / tests on on-the-fly image manipulation.
+                        // Button
+                        if ui
+                            .button("Swap Image")
+                            .on_hover_text("Swap the image data.")
+                            .clicked()
+                        {
+                            self.update_test_image().expect("Failed to update image.");
+                        }
 
-                    self.frame.show(ui, |ui| {
-                        ui.collapsing("Non-GenCam Controls", |ui| {
-                            ui.label("This is a collapsible section.");
-                            if ui
-                                .button("Get Exposure")
-                                .on_hover_text("On hover text TBD.")
-                                .clicked()
-                            {
-                                // Get exposure value.
-                            }
-                            if ui
-                                .button("Set Exposure")
-                                .on_hover_text("On hover text TBD.")
-                                .clicked()
-                            {
-                                // Set exposure value.
-                            }
-                            ui.checkbox(&mut true, "Enable Auto-Exposure");
-                        });
-                    });
+                        if ui
+                            .button("Reload Image")
+                            .on_hover_text("Refresh the image to reflect changed data.")
+                            .clicked()
+                        {
+                            ui.ctx().forget_image(&self.img_uri.clone());
+                        }
 
-                    self.frame.show(ui, |ui| {
-                        ui.collapsing("File Saving", |ui| {
-                            ui.label("This is a collapsible section.");
-                        });
+                        if ui
+                            .button("Nuke Image")
+                            .on_hover_text("Set all bytes to 0x0.")
+                            .clicked()
+                        {
+                            // Change all values in self.data to 0.
+                            self.data.take();
+
+                            ui.ctx().forget_image(&self.img_uri.clone());
+                        }
                     });
                 });
             });
+
+            // ui.columns(2, |col| {
+            //     // When inside a layout closure within the column we can just use 'ui'.
+
+            //     // FIRST COLUMN
+            //     col[0].label("First column");
+            //     col[0].vertical(|ui| {
+            //         // Here we show the image data.
+            //         self.frame.show(ui, |ui| {
+            //             if let Some(data) = &self.data {
+            //                 ui.add(
+            //                     egui::Image::new(ImageSource::Bytes {
+            //                         uri: self.img_uri.clone().into(),
+            //                         bytes: data.clone(),
+            //                     })
+            //                     .rounding(10.0)
+            //                     // .fit_to_original_size(1.0),
+            //                 );
+            //             } else {
+            //                 ui.label("No image data.");
+            //             }
+            //         });
+
+            //         self.frame.show(ui, |ui| {
+            //             ui.label("Image Controls");
+
+            //             ui.horizontal_wrapped(|ui: &mut egui::Ui| {
+            //                 // Examples / tests on on-the-fly image manipulation.
+            //                 // Button
+            //                 if ui
+            //                     .button("Swap Image")
+            //                     .on_hover_text("Swap the image data.")
+            //                     .clicked()
+            //                 {
+            //                     self.update_test_image().expect("Failed to update image.");
+            //                 }
+
+            //                 if ui
+            //                     .button("Reload Image")
+            //                     .on_hover_text("Refresh the image to reflect changed data.")
+            //                     .clicked()
+            //                 {
+            //                     ui.ctx().forget_image(&self.img_uri.clone());
+            //                 }
+
+            //                 if ui
+            //                     .button("Nuke Image")
+            //                     .on_hover_text("Set all bytes to 0x0.")
+            //                     .clicked()
+            //                 {
+            //                     // Change all values in self.data to 0.
+            //                     self.data.take();
+
+            //                     ui.ctx().forget_image(&self.img_uri.clone());
+            //                 }
+            //             });
+            //         });
+            //     });
+
+            //     // SECOND COLUMN
+            //     col[1].label("Second column");
+            //     col[1].vertical(|ui| {
+            //         self.frame.show(ui, |ui| {
+            //             ui.collapsing("GenCam Controls 1", |ui| {
+            //                 ui.label("This is a collapsible section.");
+            //                 if ui
+            //                     .button("Acquire Image")
+            //                     .on_hover_text("Acquire an image from the camera.")
+            //                     .clicked()
+            //                 {
+            //                     // Acquire image.
+            //                     self.receive_test_image().expect("Failed to receive image.");
+            //                 }
+            //             });
+            //         });
+
+            //         self.frame.show(ui, |ui| {
+            //             ui.collapsing("GenCam Controls 2", |ui| {
+            //                 ui.label("This is a collapsible section.");
+            //             });
+            //         });
+
+            //         self.frame.show(ui, |ui| {
+            //             ui.collapsing("Non-GenCam Controls", |ui| {
+            //                 ui.label("This is a collapsible section.");
+            //                 if ui
+            //                     .button("Get Exposure")
+            //                     .on_hover_text("On hover text TBD.")
+            //                     .clicked()
+            //                 {
+            //                     // Get exposure value.
+            //                 }
+            //                 if ui
+            //                     .button("Set Exposure")
+            //                     .on_hover_text("On hover text TBD.")
+            //                     .clicked()
+            //                 {
+            //                     // Set exposure value.
+            //                 }
+            //                 ui.checkbox(&mut true, "Enable Auto-Exposure");
+            //             });
+            //         });
+
+            //         self.frame.show(ui, |ui| {
+            //             ui.collapsing("File Saving", |ui| {
+            //                 ui.label("This is a collapsible section.");
+            //             });
+            //         });
+            //     });
+            // });
 
         if let Some(data) = &self.data {
             let sum: i64 = data.iter().map(|&x| x as i64).sum();
@@ -808,6 +879,7 @@ impl eframe::App for GenCamGUI {
         if self.ws.is_some() && self.ws.as_ref().unwrap().new_image_event.swap(false, std::sync::atomic::Ordering::Relaxed) {
             self.update_test_image().unwrap();
             ctx.forget_image(&self.img_uri.clone());
+            ctx.request_repaint(); // May not be able to keep this if we get spammed w/ images.
         }
 
         self.ui_developer_controls(ctx);

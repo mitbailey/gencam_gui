@@ -19,6 +19,8 @@ use egui::{menu, ImageSource, Ui};
 use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
 use circular_buffer::CircularBuffer;
 use gencam_packet::{GenCamPacket, PacketType};
+// use std::future::Future;
+// use rfd::AsyncFileDialog;
 
 struct WsBackend {
     ws_sender: WsSender,
@@ -157,6 +159,22 @@ pub struct GenCamGUI {
 
     msg_list: CircularBuffer<150, String>,
 
+    // Camera Controls Stuff
+    exposure_text_edit: String,
+    long_exp_checkbox: bool,
+    exposure_slider: f32,
+    auto_exp_checkbox: bool,
+    min_cam_temp: f32,
+    max_cam_temp: f32,
+    curr_cam_temp: f32,
+    cooler_status: CoolerStatus,
+    color_space: ColorSpaceOpt,
+    roi: [f32; 4],
+    roi_type: ROITypes,
+    roi_enabled: bool,
+    img_width: i32,
+    img_height: i32,
+
     // Websocket
     /// The URI of the websocket server.
     pub uri: String,
@@ -164,6 +182,25 @@ pub struct GenCamGUI {
     pub ws: Option<WsBackend>,
     /// The egui context.
     pub ctx: Option<egui::Context>,
+}
+
+#[derive(Debug, PartialEq)]
+enum ROITypes {
+    Center,
+    Corner,
+}
+
+#[derive(Debug, PartialEq)]
+enum ColorSpaceOpt {
+    Gray,
+    Bayer,
+    Rgb,
+}
+
+#[derive(Debug, PartialEq)]
+enum CoolerStatus {
+    On,
+    Off,
 }
 
 impl Default for GenCamGUI {
@@ -200,6 +237,19 @@ impl Default for GenCamGUI {
                 fill: egui::Color32::from_white_alpha(0),
                 stroke: egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
             },
+
+            exposure_text_edit: "0.0".into(),
+            long_exp_checkbox: false,
+            exposure_slider: 0.0,
+            auto_exp_checkbox: false,
+            min_cam_temp: -80.0,
+            max_cam_temp: 10.0,
+            curr_cam_temp: 0.0,
+            cooler_status: CoolerStatus::Off,
+            color_space: ColorSpaceOpt::Gray,
+            roi: [0.0, 0.0, 0.0, 0.0],
+            roi_type: ROITypes::Center,
+            roi_enabled: false,
 
             msg_list: CircularBuffer::new(),
             uri: "ws://localhost:9001".into(),
@@ -534,36 +584,92 @@ impl GenCamGUI {
                 ui.vertical(|ui| {
                     
                     self.frame.show(ui, |ui| {
-                        egui::CollapsingHeader::new("GenCam Controls 1")
+                        egui::CollapsingHeader::new("Camera Controls")
                             .default_open(true)
                             .show(ui, |ui| {
-                                ui.separator();
-                                ui.label("This is a collapsible section.");
-                                if ui
-                                    .button("Acquire Image")
-                                    .on_hover_text("Acquire an image from the camera.")
-                                    .clicked()
-                                {
-                                    // Acquire image.
-                                    self.receive_test_image().expect("Failed to receive image.");
-                                }
+                                ui.add_visible_ui(false, |ui| {
+                                    ui.separator();
+                                });
+                                
+                                ui.horizontal(|ui| {
+                                    ui.label("Exposure");
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.add_enabled_ui(!self.auto_exp_checkbox, |ui| {
+                                        ui.checkbox(&mut self.long_exp_checkbox, "LongExp");
+                                    });
+                                    ui.checkbox(&mut self.auto_exp_checkbox, "Auto");
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.add_enabled_ui(!self.auto_exp_checkbox, |ui| {
+                                        ui.spacing_mut().slider_width = w_view / (6.0 / w_scale);
+                                        if self.long_exp_checkbox {
+                                            ui.add(egui::Slider::new(&mut self.exposure_slider, 0.5..=3600.0).suffix(" s"));
+                                        } else {
+                                            ui.add(egui::Slider::new(&mut self.exposure_slider, 0.0..=5000.0).suffix(" ms"));
+                                        }
+                                    });
+                                });
+
+                                ui.horizontal(|ui| {
+                                    // ui.label("Options");
+                                    if ui.button("Options").clicked() {
+                                        // Open options menu.
+                                    }
+                                });
+
+                                // ui.label("This is a collapsible section.");
+                                // if ui
+                                //     .button("Acquire Image")
+                                //     .on_hover_text("Acquire an image from the camera.")
+                                //     .clicked()
+                                // {
+                                //     // Acquire image.
+                                //     self.receive_test_image().expect("Failed to receive image.");
+                                // }
+
                             });
                     });
 
                     self.frame.show(ui, |ui| {
-                        egui::CollapsingHeader::new("GenCam Controls 2")
+                        egui::CollapsingHeader::new("Thermal Controls")
                             .default_open(true)
                             .show(ui, |ui| {
-                                ui.separator();
-                                ui.label("This is a collapsible section.");
+                                ui.add_visible_ui(false, |ui| {
+                                    ui.separator();
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Temperature");
+                                    ui.label(format!("{} °C", self.curr_cam_temp));
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Cooler");
+                                    egui::ComboBox::from_id_source("CoolerStatus")
+                                        .selected_text(format!("{:?}", self.cooler_status))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut self.cooler_status, CoolerStatus::On, "On");
+                                            ui.selectable_value(&mut self.cooler_status, CoolerStatus::Off, "Off");
+                                    });
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Target");
+                                    ui.add(egui::Slider::new(&mut self.exposure_slider, self.min_cam_temp..=self.max_cam_temp).suffix(" °C"));
+                                });
                             });
                     });
 
                     self.frame.show(ui, |ui| {
-                        egui::CollapsingHeader::new("Non-GenCam Controls")
+                        egui::CollapsingHeader::new("Image Controls")
                             .default_open(true)
                             .show(ui, |ui| {
-                                ui.separator();
+                                ui.add_visible_ui(false, |ui| {
+                                    ui.separator();
+                                });
                                 ui.label("This is a collapsible section.");
                                 if ui
                                     .button("Get Exposure")
@@ -584,11 +690,77 @@ impl GenCamGUI {
                     });
 
                     self.frame.show(ui, |ui| {
-                        egui::CollapsingHeader::new("GenCam Controls 1")
+                        egui::CollapsingHeader::new("File Saving")
                             .default_open(true)
                             .show(ui, |ui| {
-                                ui.separator();
-                                ui.label("This is a collapsible section.");
+                                ui.add_visible_ui(false, |ui| {
+                                    ui.separator();
+                                });
+
+                                if ui.button("Browse").clicked() {
+                                    // Open file dialog.
+                                }
+                            });
+                    });
+
+                    self.frame.show(ui, |ui| {
+                        egui::CollapsingHeader::new("Capture Format and Area")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.add_visible_ui(false, |ui| {
+                                    ui.separator();
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Output Format");
+                                    egui::ComboBox::from_id_source("CoolerStatus")
+                                        .selected_text(format!("{:?}", self.cooler_status))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut self.cooler_status, CoolerStatus::On, "On");
+                                            ui.selectable_value(&mut self.cooler_status, CoolerStatus::Off, "Off");
+                                    });
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Color Space");
+                                    egui::ComboBox::from_id_source("ColorSpace")
+                                        .selected_text(format!("{:?}", self.color_space))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut self.color_space, ColorSpaceOpt::Gray, "Grayscale");
+                                            ui.selectable_value(&mut self.color_space, ColorSpaceOpt::Bayer, "Bayer");
+                                            ui.selectable_value(&mut self.color_space, ColorSpaceOpt::Rgb, "RGB");
+                                    });
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Capture ROI");
+                                    ui.checkbox(&mut self.roi_enabled, "Use ROI");
+                                    egui::ComboBox::from_id_source("ColorSpace")
+                                        .selected_text(format!("{:?}", self.roi_type))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut self.roi_type, ROITypes::Center, "Centered");
+                                            ui.selectable_value(&mut self.roi_type, ROITypes::Corner, "Corner");
+                                    });
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("ROI");
+                                    ui.label("Centered");
+                                    ui.add(egui::Slider::new(&mut self.roi[0], 0.0..=self.img_width as f32).suffix("X"));
+                                    ui.add(egui::Slider::new(&mut self.roi[1], 0.0..=self.img_height as f32).suffix("Y"));
+                                    ui.add(egui::Slider::new(&mut self.roi[2], 0.0..=100.0).suffix("L"));
+                                    ui.add(egui::Slider::new(&mut self.roi[3], 0.0..=100.0).suffix("W"));
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Binning");
+                                    egui::ComboBox::from_id_source("CoolerStatus")
+                                        .selected_text(format!("{:?}", self.cooler_status))
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut self.cooler_status, CoolerStatus::On, "On");
+                                            ui.selectable_value(&mut self.cooler_status, CoolerStatus::Off, "Off");
+                                    });
+                                });
                             });
                     });
 
@@ -890,3 +1062,7 @@ impl eframe::App for GenCamGUI {
         self.ui_central_panel(ctx);
     }
 }
+
+// fn execute<F: Future<Output = ()> + 'static>(f: F) {
+//     wasm_bindgen_futures::spawn_local(f);
+// }

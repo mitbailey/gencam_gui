@@ -250,6 +250,8 @@ impl Default for GenCamGUI {
             roi: [0.0, 0.0, 0.0, 0.0],
             roi_type: ROITypes::Center,
             roi_enabled: false,
+            img_height: 0,
+            img_width: 0,
 
             msg_list: CircularBuffer::new(),
             uri: "ws://localhost:9001".into(),
@@ -1031,6 +1033,8 @@ impl GenCamGUI {
 impl eframe::App for GenCamGUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         ctx.set_pixels_per_point(1.5);
+
+        ctx.request_repaint();
 
         //////////////////////////////////////////////////////////////
         // All possible modal window popups should be handled here. //

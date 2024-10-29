@@ -1566,10 +1566,10 @@ dependencies = [
 [[package]]
 name = "gencam_packet"
 version = "0.1.0"
-source = "git+https://github.com/mitbailey/gencam_packet#0699721601f42420322ea0b58ed50613b484da59"
 dependencies = [
  "crc",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

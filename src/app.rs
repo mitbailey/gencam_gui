@@ -18,7 +18,7 @@ use eframe::egui::{Visuals, load::Bytes};
 use egui::{menu, ImageSource, Ui};
 use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
 use circular_buffer::CircularBuffer;
-use gencam_packet::{GenCamPacket, PacketType};
+use gencam_packet::GenCamPacket;
 // use std::future::Future;
 // use rfd::AsyncFileDialog;
 
@@ -69,8 +69,8 @@ impl WsBackend {
             match event.clone() {
                 WsEvent::Message(WsMessage::Binary(data)) => { // All messages should be binary
                     let pkt: GenCamPacket = serde_json::from_slice(&data).expect("Failed to deserialize packet.");
-                    match pkt.packet_type {
-                        PacketType::Image => {
+                    match pkt {
+                        GenCamPacket::Image { .. } => {
                             self.image_events.push(event);
                             self.new_image_event = AtomicBool::new(true);
                         },
@@ -87,7 +87,7 @@ impl WsBackend {
         
         ui.horizontal(|ui| {
             if ui.button("Send Ack").clicked() {
-                let pkt = GenCamPacket::new(PacketType::Ack, 0, 0, 0, None);
+                let pkt = GenCamPacket::ack();
                 // Set msg to serialized pkt.
                 let msg = serde_json::to_vec(&pkt).unwrap();
                 // Send
@@ -95,7 +95,7 @@ impl WsBackend {
             }
 
             if ui.button("Send NAck").clicked() {
-                let pkt = GenCamPacket::new(PacketType::NAck, 0, 0, 0, None);
+                let pkt = GenCamPacket::nack();
                 // Set msg to serialized pkt.
                 let msg = serde_json::to_vec(&pkt).unwrap();
                 // Send
@@ -103,7 +103,7 @@ impl WsBackend {
             }
 
             if ui.button("Send ImgReq").clicked() {
-                let pkt = GenCamPacket::new(PacketType::ImgReq, 0, 0, 0, None);
+                let pkt = GenCamPacket::image_request();
                 // Set msg to serialized pkt.
                 let msg = serde_json::to_vec(&pkt).unwrap();
                 // Send
@@ -419,22 +419,34 @@ impl GenCamGUI {
         match latest_event {
             WsEvent::Message(WsMessage::Binary(data)) => {
                 // The 'image event' should contain a serialized GenCamPacket. We have to deserialize it to get the image data.
-                let pkt: GenCamPacket = serde_json::from_slice(data).unwrap();
-                let x_dim = pkt.x_dim;
-                let y_dim = pkt.y_dim;
-                let mut img_data = pkt.data.unwrap();
 
-                // Generic_Image conversions...
-                // RX and deserialize...
-                let img = ImageRef::new(&mut img_data, x_dim as usize, y_dim as usize, ColorSpace::Rgb).unwrap();
-                let img = DynamicImageRef::from(img);
-                
-                let img: DynamicImage = img.try_into().expect("Could not convert image");
-        
-                let mut data = Cursor::new(Vec::new());
-                img.write_to(&mut data, image::ImageFormat::Png).unwrap();
-                self.data = Some(data.into_inner().into());
-        
+                let pkt: GenCamPacket = serde_json::from_slice(data).unwrap();
+
+                if let GenCamPacket::Image { header: _, mut data, width, height, .. } = pkt {
+                    // We have an image packet.
+                    // let pkt = pkt.unwrap();
+                    // let x_dim = pkt;
+                    // let y_dim = pkt.y_dim;
+                    // let mut img_data = pkt.data.unwrap();
+
+                    // Generic_Image conversions...
+                    // RX and deserialize...
+                    // let x_dim = pkt;
+                    // let y_dim = pkt.;
+                    // let mut img_data = pkt.data.unwrap();
+    
+                    // Generic_Image conversions...
+                    // RX and deserialize...
+                    let img = ImageRef::new(&mut data, width as usize, height as usize, ColorSpace::Rgb).unwrap();
+                    let img = DynamicImageRef::from(img);
+                    
+                    let img: DynamicImage = img.try_into().expect("Could not convert image");
+            
+                    let mut data = Cursor::new(Vec::new());
+                    img.write_to(&mut data, image::ImageFormat::Png).unwrap();
+                    self.data = Some(data.into_inner().into());
+                }
+
                 Ok(())
             },
             _ => {

@@ -1555,7 +1555,7 @@ dependencies = [
  "getrandom",
  "image",
  "log",
- "refimage 0.11.0",
+ "refimage 0.12.2",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -2950,9 +2950,9 @@ dependencies = [
 
 [[package]]
 name = "refimage"
-version = "0.11.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea1d463ca94c94d6cd9121fe2cf1e96eae46993765ffdd214fcf8354f5c5a875"
+checksum = "5490ab8757d6e769ef652e11bd349d2e1556ca8833ee07bd9bf25a39f8ae31ce"
 dependencies = [
  "bytemuck",
  "chrono",
